@@ -9,18 +9,60 @@ import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import BottomSheet from "../components/BottomSheet";
 import { getProject, Project, PROJECTS_DIR } from '../repositories/project_repo';
 
-function colorMatrix(brightness: number, contrast: number, exposure: number) {
-  const b = brightness * 255;
+function multiplyMatrices(a: number[], b: number[]) {
+  const result = new Array(20).fill(0);
+
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 5; col++) {
+      let val = 0;
+      for (let k = 0; k < 4; k++) {
+        val += a[row * 5 + k] * b[k * 5 + col];
+      }
+      if (col === 4) {
+        val += a[row * 5 + 4];
+      }
+      result[row * 5 + col] = val;
+    }
+  }
+  return result;
+}
+
+function saturationMatrix(s: number) {
+  const invSat = 1 - s;
+  const R = 0.213 * invSat;
+  const G = 0.715 * invSat;
+  const B = 0.072 * invSat;
+  return [
+    R + s, G,     B,     0, 0,
+    R,     G + s, B,     0, 0,
+    R,     G,     B + s, 0, 0,
+    0,     0,     0,     1, 0,
+  ];
+}
+
+function colorMatrix(
+  brightness: number,
+  contrast: number,
+  exposure: number,
+  saturation: number
+) {
   const c = contrast + 1;
   const e = Math.pow(2, exposure);
   const s = c * e;
-  return [
+  const b = brightness;
+
+  const base = [
     s, 0, 0, 0, b,
     0, s, 0, 0, b,
     0, 0, s, 0, b,
     0, 0, 0, 1, 0,
   ];
+
+  const satMat = saturationMatrix(saturation);
+
+  return multiplyMatrices(base, satMat);
 }
+
 
 export default function Editor() {
   const router = useRouter();
@@ -38,6 +80,7 @@ export default function Editor() {
           return;
         }
         const p = await getProject(params.projectId as string);
+        console.log('loaded project', p);
         if (alive) setProject(p);
       } catch {
         if (alive) setProject(null);
@@ -49,19 +92,6 @@ export default function Editor() {
       alive = false;
     };
   }, [params.projectId]);
-
-  // load adjustments
-  React.useEffect(() => {
-    if (project?.adjustments) {
-      setBrightness(project.adjustments.brightness ?? 0);
-      setContrast(project.adjustments.contrast ?? 0);
-      setExposure(project.adjustments.exposure ?? 0);
-    } else {
-      setBrightness(0);
-      setContrast(0);
-      setExposure(0);
-    }
-  }, [project?.id]);
 
   // load image uri
   const [resolvedUri, setResolvedUri] = useState<string | null>(null);
@@ -86,15 +116,46 @@ export default function Editor() {
     return () => { mounted = false; };
   }, [project?.sourceUri]);
 
+  // adjustments
+  const [brightness, setBrightness] = useState<number | null>(null);
+  const [contrast, setContrast] = useState<number | null>(null);
+  const [exposure, setExposure] = useState<number | null>(null);
+  const [saturation, setSaturation] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (project?.adjustments) {
+      setBrightness(project.adjustments.brightness ?? 0);
+      setContrast(project.adjustments.contrast ?? 0);
+      setExposure(project.adjustments.exposure ?? 0);
+      setSaturation(project.adjustments.saturation ?? 1);
+    } else {
+      setBrightness(0);
+      setContrast(0);
+      setExposure(0);
+      setSaturation(1);
+    }
+  }, [project?.id]);
+
+  // only render sliders when all adjustment states are loaded (prevent glitches)
+  const adjustmentsLoaded = brightness !== null && contrast !== null && exposure !== null && saturation !== null;
+
+  const cm = useMemo(() => {
+    return colorMatrix(
+      brightness ?? 0,
+      contrast ?? 0,
+      exposure ?? 0,
+      saturation ?? 1
+    );
+  }, [
+    brightness,
+    contrast,
+    exposure,
+    saturation
+  ]);
+
+  // canvas
   const image = useImage(resolvedUri ?? null);
   const canvasRef = useCanvasRef();
-
-  // image edit states
-  const [brightness, setBrightness] = useState(0);
-  const [contrast, setContrast] = useState(0);
-  const [exposure, setExposure] = useState(0);
-
-  const cm = useMemo(() => colorMatrix(brightness, contrast, exposure), [brightness, contrast, exposure]);
 
   const saveProject = useCallback(async () => {
     const skImage = canvasRef.current?.makeImageSnapshot();
@@ -105,18 +166,22 @@ export default function Editor() {
 
     // save edited image cache
     const base64 = skImage.encodeToBase64(ImageFormat.JPEG, 95);
-    const editedUri = FileSystem.cacheDirectory + `edit-${Date.now()}.jpg`;
-    await FileSystem.writeAsStringAsync(editedUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+    const lastEditUri = FileSystem.cacheDirectory + `edit-${Date.now()}.jpg`;
+    await FileSystem.writeAsStringAsync(lastEditUri, base64, { encoding: FileSystem.EncodingType.Base64 });
 
     // save project
     const fileUri = PROJECTS_DIR + `${project?.id}.json`;
     const now = Date.now();
-    console.log(brightness, contrast, exposure);
     var saveProject: Project = {
       ...project as Project,
-      editedUri: editedUri,
+      editedUri: lastEditUri,
       updatedAt: now,
-      adjustments: { brightness, contrast, exposure },
+      adjustments: {
+        brightness,
+        contrast,
+        exposure,
+        saturation
+      },
     }
 
     await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(saveProject, null, 2));
@@ -166,7 +231,9 @@ export default function Editor() {
           <Text style={{color: 'red'}}>Error: No resolved URI available</Text>
         )}
       </View> */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 12, gap: 8 }}>
+
+      {/* Back, Save, Export */}
+      <View style={styles.topButtonsRow}>
         <TouchableOpacity onPress={() => router.back()} style={[styles.btn, { backgroundColor: '#666' }]}>
           <Text style={styles.btnText}>Back</Text>
         </TouchableOpacity>
@@ -178,6 +245,7 @@ export default function Editor() {
         </TouchableOpacity>
       </View>
 
+      {/* Canvas */}
       <View style={{ flex: 1, paddingBottom: "30%" }}>
         <Canvas
           ref={canvasRef}
@@ -190,10 +258,7 @@ export default function Editor() {
           }}
         >
           {readyToDraw && (
-            <Group layer>
-              <Paint>
-                <ColorMatrix matrix={cm} />
-              </Paint>
+            <Group layer={<Paint><ColorMatrix matrix={cm} /></Paint>}>
               <SkImage
                 image={image}
                 x={0}
@@ -212,35 +277,78 @@ export default function Editor() {
         )}
       </View>
 
+      {/* Adjustments */}
       <BottomSheet>
-        <Text style={styles.panelTitle}>Adjustments</Text>
-        <View style={styles.row}>
-          <Text style={styles.label}>Brightness</Text>
-          <Slider style={styles.slider} minimumValue={-1} maximumValue={1} value={brightness} onValueChange={setBrightness} />
-          <Text style={styles.sliderValueLabel}>{brightness.toFixed(2)}</Text>
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>Contrast</Text>
-          <Slider style={styles.slider} minimumValue={-1} maximumValue={1} value={contrast} onValueChange={setContrast} />
-          <Text style={styles.sliderValueLabel}>{contrast.toFixed(2)}</Text>
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>Exposure</Text>
-          <Slider style={styles.slider} minimumValue={-2} maximumValue={2} value={exposure} onValueChange={setExposure} />
-          <Text style={styles.sliderValueLabel}>{exposure.toFixed(2)}</Text>
-        </View>
+        <Text style={styles.bottomSheetTitle}>Adjustments</Text>
+        {
+          adjustmentsLoaded ? (
+            <>
+              <View style={styles.row}>
+                <Text style={styles.label}>Brightness</Text>
+                <Slider style={styles.slider} minimumValue={-1} maximumValue={1} value={brightness} onValueChange={setBrightness} />
+                <Text style={styles.sliderValueLabel}>{brightness.toFixed(2)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Contrast</Text>
+                <Slider style={styles.slider} minimumValue={-1} maximumValue={1} value={contrast} onValueChange={setContrast} />
+                <Text style={styles.sliderValueLabel}>{contrast.toFixed(2)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Exposure</Text>
+                <Slider style={styles.slider} minimumValue={-2} maximumValue={2} value={exposure} onValueChange={setExposure} />
+                <Text style={styles.sliderValueLabel}>{exposure.toFixed(2)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Saturation</Text>
+                <Slider style={styles.slider} minimumValue={0} maximumValue={2} value={saturation} onValueChange={setSaturation} />
+                <Text style={styles.sliderValueLabel}>{saturation.toFixed(2)}</Text>
+              </View>
+            </>
+          ):
+          (
+            <Text>Loading adjustments...</Text>
+          )
+        }
       </BottomSheet>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  panel: { paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderColor: '#ddd' },
-  panelTitle: { fontWeight: '700', marginBottom: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  label: { width: 80 },
-  sliderValueLabel: { width: 50, textAlign: 'center' },
-  slider: { flex: 1 },
-  btn: { backgroundColor: '#1e90ff', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
-  btnText: { color: 'white', fontWeight: '700' },
+  bottomSheetTitle: {
+    fontWeight: '700',
+    marginBottom: 4
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2
+  },
+  topButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal:20,
+    justifyContent: 'space-between'
+  },
+  label: {
+    width: 60
+  },
+  sliderValueLabel: {
+    textAlign: 'right'
+  },
+  slider: {
+    flex: 1,
+    width: 80
+  },
+  btn: {
+    backgroundColor: '#1e90ff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8
+  },
+  btnText: {
+    color: 'white',
+    fontWeight: '700'
+  },
 });

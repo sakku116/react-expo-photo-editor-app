@@ -11,7 +11,7 @@ export default function BottomSheet({ children }: SlidingMenuProps) {
 	const data = useMemo(() => React.Children.toArray(children), [children]);
 
 	return (
-		<View style={[StyleSheet.absoluteFillObject, { zIndex: 1000, elevation: 10 }]} pointerEvents="box-none">
+		<View style={[StyleSheet.absoluteFillObject, { zIndex: 1000, elevation: 10, opacity: 0.9}]} pointerEvents="box-none">
 			<BS
 				index={1}
 				snapPoints={snapPoints}

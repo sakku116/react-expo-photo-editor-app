@@ -50,7 +50,7 @@ function colorMatrix(
 	const c = contrast + 1;
 	const e = Math.pow(2, exposure);
 	const s = c * e;
-	const b = brightness;
+	const b = brightness * 0.5;
 
 	const base = [
 		s, 0, 0, 0, b,
@@ -307,7 +307,7 @@ export default function Editor() {
 							</View>
 							<View style={styles.row}>
 								<Text style={styles.label}>Exposure</Text>
-								<Slider style={styles.slider} minimumValue={-2} maximumValue={2} value={exposure} onValueChange={setExposure} />
+								<Slider style={styles.slider} minimumValue={-1} maximumValue={1} value={exposure} onValueChange={setExposure} />
 								<Text style={styles.sliderValueLabel}>{exposure.toFixed(2)}</Text>
 							</View>
 							<View style={styles.row}>

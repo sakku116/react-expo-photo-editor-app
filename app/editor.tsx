@@ -52,15 +52,20 @@ function colorMatrix(
 	const s = c * e;
 	const b = brightness * 0.5;
 
+	// midpoint offset: keep 0.5 stable after contrast scaling
+	// prevent contrast affect brightness
+ 	const translate = 0.5 * (1 - c);
+
 	const base = [
-		s, 0, 0, 0, b,
-		0, s, 0, 0, b,
-		0, 0, s, 0, b,
+		s, 0, 0, 0, b + translate,
+		0, s, 0, 0, b + translate,
+		0, 0, s, 0, b + translate,
 		0, 0, 0, 1, 0,
 	];
 
 	const satMat = saturationMatrix(saturation);
 
+	// merge matrix with saturation matrix
 	return multiplyMatrices(base, satMat);
 }
 

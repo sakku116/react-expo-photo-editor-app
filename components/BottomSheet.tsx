@@ -21,7 +21,7 @@ export default function BottomSheet({ children }: SlidingMenuProps) {
         style={{ elevation: 10 }}>
         <BottomSheetFlatList
           data={data}
-          keyExtractor={(_, idx) => String(idx)}
+          // keyExtractor={(_, idx) => String(idx)}
           renderItem={({ item }) => <View style={{ marginBottom: 12 }}>{item as any}</View>}
           contentContainerStyle={styles.content}
         />

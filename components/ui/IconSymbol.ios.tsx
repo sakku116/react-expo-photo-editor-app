@@ -24,6 +24,8 @@ export function IconSymbol({
         {
           width: size,
           height: size,
+          borderRadius: size / 2,
+          overflow: 'hidden',
         },
         style,
       ]}

@@ -10,9 +10,10 @@ export type Project = {
   createdAt: number; // epoch ms
   updatedAt: number; // epoch ms
   adjustments?: {
-    brightness?: number;
-    contrast?: number;
-    exposure?: number;
+    brightness?: number | null;
+    contrast?: number | null;
+    exposure?: number | null;
+    saturation?: number | null;
   };
 };
 
@@ -72,4 +73,9 @@ export async function getProject(projectId: string): Promise<Project | null> {
 
   const content = await FileSystem.readAsStringAsync(fileUri);
   return JSON.parse(content) as Project;
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  const fileUri = PROJECTS_DIR + `${projectId}.json`;
+  await FileSystem.deleteAsync(fileUri);
 }

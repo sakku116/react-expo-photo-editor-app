@@ -6,6 +6,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import BottomSheet from "../components/BottomSheet";
 import { getProject, Project, PROJECTS_DIR } from '../repositories/project_repo';
 
 function colorMatrix(brightness: number, contrast: number, exposure: number) {
@@ -49,6 +50,18 @@ export default function Editor() {
     };
   }, [params.projectId]);
 
+  // load adjustments
+  React.useEffect(() => {
+    if (project?.adjustments) {
+      setBrightness(project.adjustments.brightness ?? 0);
+      setContrast(project.adjustments.contrast ?? 0);
+      setExposure(project.adjustments.exposure ?? 0);
+    } else {
+      setBrightness(0);
+      setContrast(0);
+      setExposure(0);
+    }
+  }, [project?.id]);
 
   // load image uri
   const [resolvedUri, setResolvedUri] = useState<string | null>(null);
@@ -98,6 +111,7 @@ export default function Editor() {
     // save project
     const fileUri = PROJECTS_DIR + `${project?.id}.json`;
     const now = Date.now();
+    console.log(brightness, contrast, exposure);
     var saveProject: Project = {
       ...project as Project,
       editedUri: editedUri,
@@ -164,7 +178,7 @@ export default function Editor() {
         </TouchableOpacity>
       </View>
 
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, paddingBottom: "30%" }}>
         <Canvas
           ref={canvasRef}
           style={{ flex: 1 }}
@@ -198,21 +212,24 @@ export default function Editor() {
         )}
       </View>
 
-      <View style={styles.panel}>
+      <BottomSheet>
         <Text style={styles.panelTitle}>Adjustments</Text>
         <View style={styles.row}>
           <Text style={styles.label}>Brightness</Text>
           <Slider style={styles.slider} minimumValue={-1} maximumValue={1} value={brightness} onValueChange={setBrightness} />
+          <Text style={styles.sliderValueLabel}>{brightness.toFixed(2)}</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Contrast</Text>
           <Slider style={styles.slider} minimumValue={-1} maximumValue={1} value={contrast} onValueChange={setContrast} />
+          <Text style={styles.sliderValueLabel}>{contrast.toFixed(2)}</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Exposure</Text>
           <Slider style={styles.slider} minimumValue={-2} maximumValue={2} value={exposure} onValueChange={setExposure} />
+          <Text style={styles.sliderValueLabel}>{exposure.toFixed(2)}</Text>
         </View>
-      </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -221,7 +238,8 @@ const styles = StyleSheet.create({
   panel: { paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderColor: '#ddd' },
   panelTitle: { fontWeight: '700', marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  label: { width: 90 },
+  label: { width: 80 },
+  sliderValueLabel: { width: 50, textAlign: 'center' },
   slider: { flex: 1 },
   btn: { backgroundColor: '#1e90ff', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
   btnText: { color: 'white', fontWeight: '700' },
